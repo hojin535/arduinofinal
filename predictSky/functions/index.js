@@ -1,0 +1,48 @@
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const axios = require("axios");
+
+admin.initializeApp();
+
+const database = admin.database();
+
+exports.predictWeather = functions
+    .pubsub
+    .schedule("45,55,05,15,25,35 * * * *")
+    .onRun(async (context) => {
+      try {
+        const curr = new Date();
+        const utc = curr.getTime() + curr.getTimezoneOffset() * 60 * 1000;
+        const kr = new Date(utc + 9 * 60 * 60 * 1000);
+        const year = kr.getUTCFullYear();
+        const month = kr.getUTCMonth() + 1;
+        const date = kr.getUTCDate();
+        const hours = kr.getUTCHours();
+        const minutes = kr.getUTCMinutes();
+        const basemonth = `${month < 10 ? "0" + month : month}`;
+        const basedate = `${date < 10 ? "0" + date : date}`;
+        const basehours = `${hours < 10 ? "0" + hours : hours}`;
+        const basemin = `${minutes < 10 ? "0" + minutes : minutes}`;
+        // 초단기 실황
+        const response = await axios.get(
+            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=81&ny=75&dataType=JSON`,
+        );
+        // 초단기 예측
+        const response2 = await axios.get(
+            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=81&ny=75&dataType=JSON`,
+        );
+        const temp = response.data.response.body.items.item[3].obsrValue;
+        const rain = response.data.response.body.items.item[2].obsrValue;
+        const wet = response.data.response.body.items.item[1].obsrValue;
+        // 초단기예측에서 sky값
+        const presky = response2.data.response.body.items.item[7].fcstValue;
+
+        await database.ref("/temp").set(temp);
+        await database.ref("/rain").set(rain);
+        await database.ref("/wet").set(wet);
+        await database.ref("/presky").set(presky);
+        console.log("Data saved to database.");
+      } catch (error) {
+        console.error(error);
+      }
+    });
