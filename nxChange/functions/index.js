@@ -4,11 +4,9 @@ const axios = require("axios");
 admin.initializeApp();
 const database = admin.database();
 
-exports.predictWeather = functions
-    .region("asia-northeast3")
-    .pubsub.schedule("45,55,05,15,25,35 * * * *")
-    .timeZone("Asia/Seoul")
-    .onRun(async (context) => {
+exports.predictWeather = functions.database
+    .ref("/location/nx")
+    .onUpdate(async (change, context) => {
       try {
         const curr = new Date();
         const utc = curr.getTime() + curr.getTimezoneOffset() * 60 * 1000;
@@ -22,14 +20,18 @@ exports.predictWeather = functions
         const basedate = `${date < 10 ? "0" + date : date}`;
         const basehours = `${hours < 10 ? "0" + hours : hours}`;
         const basemin = `${minutes < 10 ? "0" + minutes : minutes}`;
+        const nx = change.after.val();
+        const nyRef = database.ref("/location/ny");
+        const nySnapshot = await nyRef.once("value");
+        const nyValue = nySnapshot.val();
         // 초단기 실황
         const response = await axios.get(
-            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=81&ny=75&dataType=JSON`,
+            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=${nx}&ny=${nyValue}&dataType=JSON`,
         );
 
         // 초단기 예측
         const response2 = await axios.get(
-            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=81&ny=75&dataType=JSON`,
+            `http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtFcst?serviceKey=XruUJ8qt0zIFd6SOXRSTxUTjQf5FYoWg0EvN4SDuwQKepEtek%2Fj3L4RnqJ2ntfHA1fweotfs4brzI4hTOvL6CA%3D%3D&numOfRows=100&pageNo=1&base_date=${year}${basemonth}${basedate}&base_time=${basehours}${basemin}&nx=${nx}&ny=${nyValue}&dataType=JSON`,
         );
 
         const forecastData = response2.data.response.body.items.item;
